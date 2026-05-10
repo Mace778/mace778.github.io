@@ -1,100 +1,385 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2D Minecraft 简易版</title>
+    <title>FN P90 技术解构 - 动态科普</title>
     <style>
+        :root {
+            --bg-color: #f8f9fa;
+            --accent-color: #3498db;
+            --text-main: #2c3e50;
+            --text-sub: #7f8c8d;
+            --p90-color: #34495e;
+            --ammo-color: #f1c40f;
+            --ui-border: rgba(0,0,0,0.1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', 'PingFang SC', sans-serif; }
+
         body {
-            margin: 0;
-            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            overflow: hidden;
             display: flex;
-            flex-direction: column;
-            align-items: center;
             justify-content: center;
+            align-items: center;
             height: 100vh;
-            background-color: #87CEEB;
         }
 
-        h1 {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            color: #333;
+        /* 视频容器 */
+        #video-viewport {
+            width: 100vw;
+            height: 100vh;
+            max-width: 1200px;
+            max-height: 675px; /* 16:9 */
+            background: white;
+            position: relative;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.1);
+            overflow: hidden;
+            border-radius: 12px;
         }
 
-        .game-container {
-            display: grid;
-            grid-template-rows: repeat(20, 20px);
-            grid-template-columns: repeat(30, 20px);
-            gap: 1px;
-            background-color: #333;
+        /* 装饰性UI元素 */
+        .ui-overlay {
+            position: absolute;
+            top: 40px;
+            left: 40px;
+            right: 40px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            z-index: 100;
         }
 
-        .block {
-            width: 20px;
+        .rec-dot {
+            width: 12px;
+            height: 12px;
+            background: #e74c3c;
+            border-radius: 50%;
+            display: inline-block;
+            animation: blink 1s infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+        /* 舞台区域 */
+        #stage {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* P90 矢量图形 */
+        .p90-container {
+            position: relative;
+            width: 600px;
+            height: 300px;
+            transition: all 1s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .p90-svg {
+            width: 100%;
+            height: 100%;
+            fill: var(--p90-color);
+            filter: drop-shadow(0 10px 20px rgba(0,0,0,0.1));
+        }
+
+        /* 弹匣动画 */
+        .magazine {
+            position: absolute;
+            top: 15px;
+            left: 175px;
+            width: 280px;
+            height: 35px;
+            background: rgba(52, 152, 219, 0.2);
+            border: 2px solid var(--accent-color);
+            border-radius: 4px;
+            transform-origin: top;
+            opacity: 0;
+            display: flex;
+            align-items: center;
+            padding: 2px;
+        }
+
+        .bullet-row {
+            display: flex;
+            gap: 4px;
+        }
+
+        .bullet {
+            width: 8px;
             height: 20px;
-            background-color: #228B22; /* 草地颜色 */
-            box-sizing: border-box;
+            background: var(--ammo-color);
+            border-radius: 2px;
         }
 
-        .dirt {
-            background-color: #8B4513; /* 泥土颜色 */
+        /* 标注系统 */
+        .callout {
+            position: absolute;
+            border-left: 2px solid var(--accent-color);
+            padding-left: 15px;
+            opacity: 0;
+            transform: translateX(-20px);
+            transition: all 0.8s;
         }
 
-        .stone {
-            background-color: #696969; /* 石头颜色 */
+        .callout h3 { font-size: 1.2rem; margin-bottom: 4px; color: var(--accent-color); }
+        .callout p { font-size: 0.9rem; color: var(--text-sub); }
+
+        /* 字幕系统 */
+        #subtitle-container {
+            position: absolute;
+            bottom: 60px;
+            width: 100%;
+            text-align: center;
+            z-index: 200;
+            padding: 0 40px;
         }
 
-        .sky {
-            background-color: #87CEEB; /* 天空颜色 */
+        .sub-cn {
+            font-size: 1.5rem;
+            font-weight: 600;
+            display: block;
+            margin-bottom: 8px;
+            text-shadow: 0 2px 4px rgba(255,255,255,0.8);
         }
+
+        .sub-en {
+            font-size: 1rem;
+            color: var(--text-sub);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* 动画关键帧状态 */
+        .active .callout { opacity: 1; transform: translateX(0); }
+        .active .magazine { opacity: 1; }
+
+        /* 5.7mm 弹药展示 */
+        .ammo-compare {
+            position: absolute;
+            display: flex;
+            gap: 40px;
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.8s;
+        }
+
+        .ammo-item { text-align: center; }
+        .ammo-shape {
+            width: 20px;
+            height: 60px;
+            background: #95a5a6;
+            margin: 0 auto 10px;
+            border-radius: 4px 4px 2px 2px;
+            position: relative;
+        }
+        .ammo-57 { height: 50px; background: var(--ammo-color); width: 14px; }
+        .ammo-item span { font-size: 0.8rem; font-weight: bold; }
+
     </style>
 </head>
 <body>
-    <h1>2D Minecraft 简易版</h1>
-    <p>点击方块可以“挖掘”，右键可以“放置”。</p>
-    <div class="game-container" id="gameContainer"></div>
+
+    <div id="video-viewport">
+        <!-- UI 装饰 -->
+        <div class="ui-overlay">
+            <div><span class="rec-dot"></span><strong>REC: INTRODUCTION TO P90</strong></div>
+            <div>CHAPTER: <span id="chapter-num">01</span>/05</div>
+        </div>
+
+        <div id="stage">
+            <!-- P90 主体 -->
+            <div class="p90-container" id="p90-main">
+                <!-- 简化的P90 SVG 路径 -->
+                <svg class="p90-svg" viewBox="0 0 800 400">
+                    <!-- 枪身主体 -->
+                    <path d="M100,250 L150,150 L600,150 L700,180 L720,280 L650,320 L500,320 L450,280 L200,280 L150,330 L80,310 Z" />
+                    <!-- 握把孔 -->
+                    <circle cx="230" cy="230" r="35" fill="white" />
+                    <circle cx="480" cy="230" r="40" fill="white" />
+                    <!-- 枪管 -->
+                    <rect x="700" y="195" width="50" height="15" rx="2" />
+                </svg>
+
+                <!-- 顶部弹匣 -->
+                <div class="magazine" id="p90-mag">
+                    <div class="bullet-row" id="bullet-row"></div>
+                </div>
+
+                <!-- 标注点 -->
+                <div class="callout" style="top: -60px; left: 180px;" id="callout-1">
+                    <h3>透明半透明弹匣</h3>
+                    <p>Translucent Magazine</p>
+                </div>
+
+                <div class="callout" style="bottom: -40px; left: 400px;" id="callout-2">
+                    <h3>无托结构 (Bullpup)</h3>
+                    <p>Compact Bullpup Layout</p>
+                </div>
+            </div>
+
+            <!-- 弹药对比 -->
+            <div class="ammo-compare" id="ammo-area">
+                <div class="ammo-item">
+                    <div class="ammo-shape" style="height: 55px; width: 18px;"></div>
+                    <span>9x19mm Parabellum</span>
+                </div>
+                <div class="ammo-item">
+                    <div class="ammo-shape ammo-57"></div>
+                    <span>5.7x28mm SS190</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 字幕 -->
+        <div id="subtitle-container">
+            <span class="sub-cn" id="cn">正在加载...</span>
+            <span class="sub-en" id="en">Loading...</span>
+        </div>
+    </div>
+
     <script>
-        // 设置游戏网格
-        const gameContainer = document.getElementById('gameContainer');
-        const rows = 20;
-        const cols = 30;
-        const skyRow = 5; // 天空的行数
+        const cnSub = document.getElementById('cn');
+        const enSub = document.getElementById('en');
+        const p90 = document.getElementById('p90-main');
+        const mag = document.getElementById('p90-mag');
+        const bullets = document.getElementById('bullet-row');
+        const ammoArea = document.getElementById('ammo-area');
+        const c1 = document.getElementById('callout-1');
+        const c2 = document.getElementById('callout-2');
+        const chapter = document.getElementById('chapter-num');
 
-        // 初始化游戏网格
-        for (let i = 0; i < rows; i++) {
-            for (let j = 0; j < cols; j++) {
-                const block = document.createElement('div');
-                // 设置背景：顶部为天空，中间为泥土，底部为石头
-                if (i < skyRow) {
-                    block.className = 'block sky';
-                } else if (i < rows - 3) {
-                    block.className = 'block dirt';
-                } else {
-                    block.className = 'block stone';
+        // 初始化子弹
+        for(let i=0; i<25; i++) {
+            const b = document.createElement('div');
+            b.className = 'bullet';
+            bullets.appendChild(b);
+        }
+
+        const script = [
+            {
+                time: 0,
+                cn: "在现代枪械史上，FN P90 是一个极具未来感的传奇。",
+                en: "In the history of firearms, the FN P90 is a futuristic legend.",
+                action: () => {
+                    p90.style.transform = "scale(0.8) translateX(0)";
+                    chapter.innerText = "01";
                 }
-                block.addEventListener('click', () => digBlock(block)); // 左键挖掘方块
-                block.addEventListener('contextmenu', (e) => {
-                    e.preventDefault();
-                    placeBlock(block); // 右键放置方块
-                });
-                gameContainer.appendChild(block);
+            },
+            {
+                time: 4000,
+                cn: "它诞生于80年代末，最初是为非一线作战人员设计的个人防卫武器。",
+                en: "Born in the late 80s, it was designed as a Personal Defense Weapon (PDW).",
+                action: () => {
+                    p90.style.transform = "scale(1) translateX(0)";
+                    chapter.innerText = "02";
+                }
+            },
+            {
+                time: 8000,
+                cn: "最引人注目的是其置于顶部的 50 发透明双排弹匣。",
+                en: "The most striking feature is the top-mounted 50-round translucent magazine.",
+                action: () => {
+                    mag.style.opacity = "1";
+                    mag.style.transform = "translateY(-10px)";
+                    c1.style.opacity = "1";
+                    c1.style.transform = "translateX(0)";
+                    chapter.innerText = "03";
+                }
+            },
+            {
+                time: 12000,
+                cn: "注意其独特的送弹方式：子弹横向堆叠，进入枪膛前旋转 90 度。",
+                en: "Note the unique feeding: rounds are stacked horizontally and rotate 90°.",
+                action: () => {
+                    bullets.style.animation = "moveBullets 2s infinite linear";
+                    // 模拟旋转动画
+                    const firstBullet = bullets.firstChild;
+                    firstBullet.style.transition = "all 0.5s";
+                    firstBullet.style.transform = "rotate(90deg)";
+                }
+            },
+            {
+                time: 16000,
+                cn: "它发射特制的 5.7x28mm 弹药，兼具手枪的低后坐力和步枪的穿透力。",
+                en: "It fires 5.7x28mm ammo, combining low recoil with rifle-like penetration.",
+                action: () => {
+                    p90.style.transform = "translateY(-100px) scale(0.7)";
+                    mag.style.opacity = "0";
+                    c1.style.opacity = "0";
+                    ammoArea.style.opacity = "1";
+                    ammoArea.style.transform = "translateY(0)";
+                    chapter.innerText = "04";
+                }
+            },
+            {
+                time: 21000,
+                cn: "全枪采用无托结构，极其紧凑，适合在狭窄的空间内快速反应。",
+                en: "The bullpup design makes it extremely compact for CQB scenarios.",
+                action: () => {
+                    ammoArea.style.opacity = "0";
+                    p90.style.transform = "scale(1.1) translateX(0)";
+                    c2.style.opacity = "1";
+                    c2.style.transform = "translateX(0)";
+                    chapter.innerText = "05";
+                }
+            },
+            {
+                time: 26000,
+                cn: "向下抛壳的设计让左右手都能完美操作，真正实现了人体工程学突破。",
+                en: "Bottom ejection allows ambidextrous use, a true ergonomic breakthrough.",
+                action: () => {
+                    c2.innerHTML = "<h3>向下抛壳</h3><p>Bottom Ejection</p>";
+                }
+            },
+            {
+                time: 30000,
+                cn: "这就是 FN P90：工业设计与实用主义的完美结合。",
+                en: "This is the FN P90: A perfect blend of industrial design and pragmatism.",
+                action: () => {
+                    p90.style.transform = "scale(1) rotate(-5deg)";
+                    c2.style.opacity = "0";
+                }
+            }
+        ];
+
+        let currentStep = 0;
+
+        function playNextStep() {
+            if (currentStep < script.length) {
+                const step = script[currentStep];
+                cnSub.innerText = step.cn;
+                enSub.innerText = step.en;
+                step.action();
+                
+                let nextTime = (currentStep < script.length - 1) 
+                    ? script[currentStep + 1].time - step.time 
+                    : 5000;
+                
+                currentStep++;
+                setTimeout(playNextStep, nextTime);
             }
         }
 
-        // 挖掘方块（变为天空）
-        function digBlock(block) {
-            if (!block.classList.contains('sky')) {
-                block.className = 'block sky';
-            }
-        }
+        // 启动动画
+        window.onload = () => {
+            setTimeout(playNextStep, 1000);
+        };
 
-        // 放置方块（默认放泥土）
-        function placeBlock(block) {
-            if (block.classList.contains('sky')) {
-                block.className = 'block dirt';
-            }
-        }
     </script>
+
+    <style>
+        /* 补充的动画 */
+        @keyframes moveBullets {
+            from { transform: translateX(0); }
+            to { transform: translateX(-12px); }
+        }
+    </style>
 </body>
 </html>
