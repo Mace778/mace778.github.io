@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>三角洲行动 - 战术简报</title>
+    <style>
+        :root {
+            --tactical-blue: #00e5ff;
+            --tactical-orange: #ff9d00;
+            --bg-dark: #0a0c0f;
+            --panel-bg: rgba(20, 25, 30, 0.8);
+            --text-main: #e0e6ed;
+            --text-dim: #94a3b8;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Exo 2', 'PingFang SC', sans-serif; }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        #video-viewport {
+            width: 100vw;
+            height: 100vh;
+            max-width: 1200px;
+            max-height: 675px;
+            background: radial-gradient(circle at center, #1a232e 0%, #0a0c0f 100%);
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        /* 扫描线背景 */
+        .scanline {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(to bottom, rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), 
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 4px, 3px 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        /* HUD 装饰 */
+        .hud-frame {
+            position: absolute;
+            border: 2px solid var(--tactical-blue);
+            width: 40px; height: 40px;
+            opacity: 0.5;
+        }
+        .top-left { top: 20px; left: 20px; border-right: 0; border-bottom: 0; }
+        .top-right { top: 20px; right: 20px; border-left: 0; border-bottom: 0; }
+        .bottom-left { bottom: 20px; left: 20px; border-right: 0; border-top: 0; }
+        .bottom-right { bottom: 20px; right: 20px; border-left: 0; border-top: 0; }
+
+        /* 内容展示区 */
+        #content-layer {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 5;
+        }
+
+        .title-card {
+            text-align: center;
+            opacity: 0;
+            transform: scale(0.9);
+            transition: all 1s ease;
+        }
+
+        .title-card h1 {
+            font-size: 4rem;
+            letter-spacing: 15px;
+            background: linear-gradient(to bottom, #fff, #94a3b8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+            filter: drop-shadow(0 0 10px rgba(0,229,255,0.5));
+        }
+
+        .operator-display {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: none;
+            justify-content: space-around;
+            align-items: center;
+            padding: 0 100px;
+        }
+
+        .mode-box {
+            background: var(--panel-bg);
+            border-left: 4px solid var(--tactical-blue);
+            padding: 20px;
+            width: 300px;
+            transform: skewX(-10deg);
+            opacity: 0;
+            transition: 0.5s;
+        }
+
+        .mode-box h3 { transform: skewX(10deg); color: var(--tactical-blue); margin-bottom: 10px; }
+        .mode-box p { transform: skewX(10deg); font-size: 0.9rem; line-height: 1.4; }
+
+        /* 字幕 */
+        #subtitle-container {
+            position: absolute;
+            bottom: 60px;
+            width: 100%;
+            text-align: center;
+            padding: 0 50px;
+        }
+
+        .sub-cn { font-size: 1.6rem; font-weight: bold; color: #fff; display: block; margin-bottom: 5px; }
+        .sub-en { font-size: 1rem; color: var(--tactical-blue); text-transform: uppercase; opacity: 0.8; }
+
+        /* 动画元素 */
+        .radar-circle {
+            position: absolute;
+            border: 1px solid rgba(0, 229, 255, 0.2);
+            border-radius: 50%;
+            animation: pulse 4s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.5); opacity: 0.8; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+
+        .glitch-active { animation: glitch 0.3s infinite; }
+        @keyframes glitch {
+            0% { transform: translate(0); }
+            20% { transform: translate(-2px, 2px); }
+            40% { transform: translate(-2px, -2px); }
+            60% { transform: translate(2px, 2px); }
+            80% { transform: translate(2px, -2px); }
+            100% { transform: translate(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="video-viewport">
+        <div class="scanline"></div>
+        
+        <div class="hud-frame top-left"></div>
+        <div class="hud-frame top-right"></div>
+        <div class="hud-frame bottom-left"></div>
+        <div class="hud-frame bottom-right"></div>
+
+        <div id="content-layer">
+            <!-- 场景1: 标题 -->
+            <div id="scene-title" class="title-card">
+                <h1>DELTA FORCE</h1>
+                <p style="color: var(--tactical-orange); letter-spacing: 5px;">HAWK OPS | 三角洲行动</p>
+            </div>
+
+            <!-- 场景2: 模式展示 -->
+            <div id="scene-modes" class="operator-display">
+                <div class="mode-box" id="mode-1">
+                    <h3>烽火地带</h3>
+                    <p>Hazard Operations: 极富策略性的物资搜刮与撤离玩法，体验高风险高回报的博弈。</p>
+                </div>
+                <div class="mode-box" id="mode-2">
+                    <h3>全面战场</h3>
+                    <p>Havoc Warfare: 传承系列经典的超大规模地图多人对战，感受海陆空全维度战争。</p>
+                </div>
+                <div class="mode-box" id="mode-3">
+                    <h3>黑鹰坠落</h3>
+                    <p>Black Hawk Down: 以Unreal Engine 5重制经典战役，致敬25年前的单机传奇。</p>
+                </div>
+            </div>
+
+            <!-- 场景3: 战术干员 -->
+            <div id="scene-tactics" style="display:none; text-align:center;">
+                <svg width="400" height="300" viewBox="0 0 400 300">
+                    <circle cx="200" cy="150" r="80" fill="none" stroke="#00e5ff" stroke-width="2" stroke-dasharray="10 5" />
+                    <path d="M150,150 L250,150 M200,100 L200,200" stroke="#00e5ff" stroke-width="1" />
+                    <rect x="180" y="130" width="40" height="40" fill="rgba(0,229,255,0.2)" stroke="#00e5ff" />
+                    <text x="200" y="260" fill="#00e5ff" text-anchor="middle" font-size="14">TACTICAL OPERATOR SYSTEM</text>
+                </svg>
+            </div>
+        </div>
+
+        <div id="subtitle-container">
+            <span class="sub-cn" id="cn">正在初始化任务简报...</span>
+            <span class="sub-en" id="en">Initializing Mission Briefing...</span>
+        </div>
+    </div>
+
+    <script>
+        const cnSub = document.getElementById('cn');
+        const enSub = document.getElementById('en');
+        const sTitle = document.getElementById('scene-title');
+        const sModes = document.getElementById('scene-modes');
+        const sTactics = document.getElementById('scene-tactics');
+        const m1 = document.getElementById('mode-1');
+        const m2 = document.getElementById('mode-2');
+        const m3 = document.getElementById('mode-3');
+
+        const timeline = [
+            {
+                time: 0,
+                cn: "《三角洲行动》是一款设定在2035年的第一人称特种战术射击游戏。",
+                en: "Delta Force: Hawk Ops is a tactical FPS set in the year 2035.",
+                action: () => {
+                    sTitle.style.opacity = "1";
+                    sTitle.style.transform = "scale(1)";
+                }
+            },
+            {
+                time: 4000,
+                cn: "作为经典IP《三角洲特种部队》的现代重启之作，它带来了顶级的视听表现。",
+                en: "As a reboot of the classic Delta Force IP, it brings top-tier audiovisuals.",
+                action: () => {
+                    sTitle.classList.add('glitch-active');
+                }
+            },
+            {
+                time: 8000,
+                cn: "游戏核心包含三大支柱模式，满足不同玩家的需求。",
+                en: "The game features three core modes catering to different playstyles.",
+                action: () => {
+                    sTitle.style.display = "none";
+                    sModes.style.display = "flex";
+                }
+            },
+            {
+                time: 11000,
+                cn: "‘烽火地带’是核心的撤离玩法，玩家需要在危险区域搜刮物资并成功突围。",
+                en: "Hazard Operations is an extraction-based mode with high-stakes looting.",
+                action: () => {
+                    m1.style.opacity = "1";
+                    m1.style.transform = "skewX(-10deg) translateX(20px)";
+                }
+            },
+            {
+                time: 15000,
+                cn: "‘全面战场’则提供大规模的多人对抗，包含载具驾驶和破坏系统。",
+                en: "Havoc Warfare offers large-scale battles with vehicles and destruction.",
+                action: () => {
+                    m2.style.opacity = "1";
+                    m2.style.transform = "skewX(-10deg) translateX(20px)";
+                }
+            },
+            {
+                time: 19000,
+                cn: "对于怀旧玩家，‘黑鹰坠落’剧情战役通过现代技术还原了摩加迪沙的经典战斗。",
+                en: "For fans, the Black Hawk Down campaign remasters the iconic Mogadishu battle.",
+                action: () => {
+                    m3.style.opacity = "1";
+                    m3.style.transform = "skewX(-10deg) translateX(20px)";
+                }
+            },
+            {
+                time: 24000,
+                cn: "游戏引入了干员系统，每位干员拥有独特的战术道具与技能特长。",
+                en: "The Operator System introduces unique tactical gadgets and special skills.",
+                action: () => {
+                    sModes.style.opacity = "0";
+                    setTimeout(() => {
+                        sModes.style.display = "none";
+                        sTactics.style.display = "block";
+                    }, 500);
+                }
+            },
+            {
+                time: 29000,
+                cn: "无论是单人潜行还是团队协作，《三角洲行动》都强调极致的战术深度。",
+                en: "Whether solo stealth or team play, it emphasizes deep tactical gameplay.",
+                action: () => {
+                    sTactics.style.transform = "scale(1.2)";
+                }
+            },
+            {
+                time: 34000,
+                cn: "准备好加入全球最顶尖的特种部队，执行不可能完成的任务。",
+                en: "Prepare to join the world's elite special forces for impossible missions.",
+                action: () => {
+                    sTactics.style.opacity = "0";
+                    sTitle.style.display = "block";
+                    sTitle.style.opacity = "1";
+                    sTitle.classList.remove('glitch-active');
+                }
+            }
+        ];
+
+        let step = 0;
+        function play() {
+            if (step < timeline.length) {
+                const current = timeline[step];
+                cnSub.innerText = current.cn;
+                enSub.innerText = current.en;
+                current.action();
+                
+                const nextTime = step < timeline.length - 1 ? timeline[step+1].time - current.time : 5000;
+                step++;
+                setTimeout(play, nextTime);
+            }
+        }
+
+        window.onload = () => {
+            // 背景圆圈装饰
+            const viewport = document.getElementById('video-viewport');
+            for(let i=0; i<3; i++) {
+                const c = document.createElement('div');
+                c.className = 'radar-circle';
+                c.style.width = c.style.height = (400 + i*200) + 'px';
+                c.style.left = 'calc(50% - ' + (200 + i*100) + 'px)';
+                c.style.top = 'calc(50% - ' + (200 + i*100) + 'px)';
+                c.style.animationDelay = (i * 1) + 's';
+                viewport.appendChild(c);
+            }
+            play();
+        };
+    </script>
+</body>
+</html>
